@@ -45,10 +45,12 @@ describe JIRA::Resource::Issue do
       end
 
       before do
-        stub_request(:get, "#{site_url}/jira/rest/api/2/search?expand=transitions.fields&maxResults=1000&startAt=0")
+        stub_request(:post, "#{site_url}/jira/rest/api/2/search/jql")
+          .with(body: { jql: '', maxResults: 1000, expand: 'transitions.fields' }.to_json)
           .to_return(status: 200, body: get_mock_response('issue.json'))
 
-        stub_request(:get, "#{site_url}/jira/rest/api/2/search?expand=transitions.fields&maxResults=1000&startAt=11")
+        stub_request(:post, "#{site_url}/jira/rest/api/2/search/jql?startAt=11")
+          .with(body: { jql: '', maxResults: 1000, expand: 'transitions.fields' }.to_json)
           .to_return(status: 200, body: get_mock_response('empty_issues.json'))
       end
 

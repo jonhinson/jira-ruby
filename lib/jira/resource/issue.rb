@@ -66,9 +66,19 @@ module JIRA
         max_results = 1000
         result = []
         loop do
-          url = client.options[:rest_base_path] +
-                "/search?expand=transitions.fields&maxResults=#{max_results}&startAt=#{start_at}"
-          response = client.get(url)
+          url = client.options[:rest_base_path] + "/search/jql"
+
+          # Build request body for getting all issues
+          body = {
+            jql: '', # Empty JQL returns all accessible issues
+            maxResults: max_results,
+            expand: 'transitions.fields'
+          }
+
+          # Add startAt parameter for pagination
+          url += "?startAt=#{start_at}" if start_at > 0
+
+          response = client.post(url, body.to_json)
           json = parse_json(response.body)
           json['issues'].map do |issue|
             result.push(client.Issue.build(issue))
@@ -81,23 +91,36 @@ module JIRA
       end
 
       def self.jql(client, jql, options = { fields: nil, start_at: nil, max_results: nil, expand: nil, validate_query: true })
-        url = client.options[:rest_base_path] + "/search?jql=#{CGI.escape(jql)}"
+        url = client.options[:rest_base_path] + "/search/jql"
+
+        # Build request body according to new API
+        body = {
+          jql: jql
+        }
 
         if options[:fields]
-          url << "&fields=#{options[:fields].map do |value|
-                              CGI.escape(client.Field.name_to_id(value))
-                            end.join(',')}"
+          body[:fields] = options[:fields].map do |value|
+            client.Field.name_to_id(value)
+          end
         end
-        url << "&startAt=#{CGI.escape(options[:start_at].to_s)}" if options[:start_at]
-        url << "&maxResults=#{CGI.escape(options[:max_results].to_s)}" if options[:max_results]
-        url << '&validateQuery=false' if options[:validate_query] === false # rubocop:disable Style/CaseEquality
+
+        body[:maxResults] = options[:max_results] if options[:max_results]
+
+        # Handle pagination with startAt parameter (converted to nextPageToken format)
+        if options[:start_at] && options[:start_at] > 0
+          # For backward compatibility, we'll use startAt in the URL for now
+          # since nextPageToken requires a different pagination approach
+          url += "?startAt=#{options[:start_at]}"
+        end
 
         if options[:expand]
           options[:expand] = [options[:expand]] if options[:expand].is_a?(String)
-          url << "&expand=#{options[:expand].to_a.map { |value| CGI.escape(value.to_s) }.join(',')}"
+          body[:expand] = options[:expand].join(',')
         end
 
-        response = client.get(url)
+        # Note: validateQuery is not supported in the new API, queries are always validated
+
+        response = client.post(url, body.to_json)
         json = parse_json(response.body)
         return json['total'] if options[:max_results]&.zero?
 
