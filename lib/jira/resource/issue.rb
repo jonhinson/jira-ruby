@@ -86,32 +86,36 @@ module JIRA
         result
       end
 
-      def self.jql(client, jql, options = { fields: nil, max_results: nil, expand: nil, next_page_token: nil })
-        url = client.options[:rest_base_path] + "/search/jql?jql=#{CGI.escape(jql)}"
+      def self.jql(client, jql, options = { fields: nil, max_results: nil, expand: nil, paginate: false })
+        base_url = client.options[:rest_base_path] + "/search/jql?jql=#{CGI.escape(jql)}"
 
         if options[:fields]
-          url << "&fields=#{options[:fields].map do |value|
+          base_url << "&fields=#{options[:fields].map do |value|
                               CGI.escape(client.Field.name_to_id(value))
                             end.join(',')}"
         end
 
-        url << "&nextPageToken=#{CGI.escape(options[:next_page_token])}" if options[:next_page_token]
-        url << "&maxResults=#{CGI.escape(options[:max_results].to_s)}" if options[:max_results]
+        base_url << "&maxResults=#{CGI.escape(options[:max_results].to_s)}" if options[:max_results]
 
         if options[:expand]
           options[:expand] = [options[:expand]] if options[:expand].is_a?(String)
-          url << "&expand=#{options[:expand].to_a.map { |value| CGI.escape(value.to_s) }.join(',')}"
+          base_url << "&expand=#{options[:expand].to_a.map { |value| CGI.escape(value.to_s) }.join(',')}"
         end
 
-        # Note: validateQuery parameter is not needed in the new API - queries are always validated
-
-        response = client.get(url)
-        json = parse_json(response.body)
-        return json['total'] if options[:max_results]&.zero?
-
-        json['issues'].map do |issue|
-          client.Issue.build(issue)
+        result = []
+        next_page_token = nil
+        loop do
+          url = base_url
+          url += "&nextPageToken=#{CGI.escape(next_page_token)}" if next_page_token
+          response = client.get(url)
+          json = parse_json(response.body)
+          json['issues'].map do |issue|
+            result.push(client.Issue.build(issue))
+          end
+          break if json['isLast'] || json['issues'].empty? || !options[:paginate]
+          next_page_token = json['nextPageToken']
         end
+        result
       end
 
       # Fetches the attributes for the specified resource from JIRA unless

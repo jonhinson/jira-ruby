@@ -74,7 +74,7 @@ describe JIRA::Resource::Issue do
     response = double
     issue = double
 
-    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}}')
+    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}, "isLast": true}')
     expect(client).to receive(:get).with('/jira/rest/api/2/search/jql?jql=foo+bar')
                                    .and_return(response)
     expect(client).to receive(:Issue).and_return(issue)
@@ -87,7 +87,7 @@ describe JIRA::Resource::Issue do
     response = double
     issue = double
 
-    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}}')
+    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}, "isLast": true}')
     expect(client).to receive(:get)
       .with('/jira/rest/api/2/search/jql?jql=foo+bar&fields=foo,bar')
       .and_return(response)
@@ -97,37 +97,65 @@ describe JIRA::Resource::Issue do
     expect(described_class.jql(client, 'foo bar', fields: %w[foo bar])).to eq([''])
   end
 
-  it 'searches an issue with a jql query string, next page token, and maxResults' do
+  it 'searches an issue with a jql query string and maxResults' do
     response = double
     issue = double
 
-    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}}')
+    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}, "isLast": true}')
     expect(client).to receive(:get)
-      .with('/jira/rest/api/2/search/jql?jql=foo+bar&nextPageToken=token456&maxResults=3')
+      .with('/jira/rest/api/2/search/jql?jql=foo+bar&maxResults=3')
       .and_return(response)
     expect(client).to receive(:Issue).and_return(issue)
     expect(issue).to receive(:build).with(%w[key foo]).and_return('')
 
-    expect(described_class.jql(client, 'foo bar', next_page_token: 'token456', max_results: 3)).to eq([''])
+    expect(described_class.jql(client, 'foo bar', max_results: 3)).to eq([''])
   end
 
-  it 'searches an issue with a jql query string and maxResults equals zero and should return the count of tickets' do
+  it 'searches issues without pagination by default' do
     response = double
-    double
+    issue = double
 
-    allow(response).to receive(:body).and_return('{"total": 1, "issues": []}')
+    allow(response).to receive(:body).and_return('{"issues": [{"key":"foo"}], "isLast": false, "nextPageToken": "token123"}')
     expect(client).to receive(:get)
-      .with('/jira/rest/api/2/search/jql?jql=foo+bar&maxResults=0')
+      .with('/jira/rest/api/2/search/jql?jql=foo+bar')
       .and_return(response)
+    expect(client).to receive(:Issue).and_return(issue)
+    expect(issue).to receive(:build).with({ 'key' => 'foo' }).and_return('issue1')
 
-    expect(described_class.jql(client, 'foo bar', max_results: 0)).to eq(1)
+    # Should only return first page results even though isLast is false
+    expect(described_class.jql(client, 'foo bar')).to eq(['issue1'])
+  end
+
+  it 'searches issues with pagination when paginate option is true' do
+    first_response = double
+    second_response = double
+    issue = double
+
+    # First page response
+    allow(first_response).to receive(:body).and_return('{"issues": [{"key":"foo"}], "isLast": false, "nextPageToken": "token123"}')
+    expect(client).to receive(:get)
+      .with('/jira/rest/api/2/search/jql?jql=foo+bar')
+      .and_return(first_response)
+
+    # Second page response
+    allow(second_response).to receive(:body).and_return('{"issues": [{"key":"bar"}], "isLast": true}')
+    expect(client).to receive(:get)
+      .with('/jira/rest/api/2/search/jql?jql=foo+bar&nextPageToken=token123')
+      .and_return(second_response)
+
+    expect(client).to receive(:Issue).twice.and_return(issue)
+    expect(issue).to receive(:build).with({ 'key' => 'foo' }).and_return('issue1')
+    expect(issue).to receive(:build).with({ 'key' => 'bar' }).and_return('issue2')
+
+    # Should return all pages when paginate is true
+    expect(described_class.jql(client, 'foo bar', paginate: true)).to eq(['issue1', 'issue2'])
   end
 
   it 'searches an issue with a jql query string and string expand' do
     response = double
     issue = double
 
-    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}}')
+    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}, "isLast": true}')
     expect(client).to receive(:get)
       .with('/jira/rest/api/2/search/jql?jql=foo+bar&expand=transitions')
       .and_return(response)
@@ -141,7 +169,7 @@ describe JIRA::Resource::Issue do
     response = double
     issue = double
 
-    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}}')
+    allow(response).to receive(:body).and_return('{"issues": {"key":"foo"}, "isLast": true}')
     expect(client).to receive(:get)
       .with('/jira/rest/api/2/search/jql?jql=foo+bar&expand=transitions')
       .and_return(response)
