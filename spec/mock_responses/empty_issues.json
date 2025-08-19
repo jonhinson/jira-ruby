@@ -3,6 +3,7 @@
   "startAt": 11,
   "maxResults": 1000,
   "total": 0,
+  "isLast": true,
   "issues": [
   ]
 }

@@ -62,27 +62,31 @@ module JIRA
       # @param client [JIRA::Client]
       # @return [Array<JIRA::Resource::Issue>]
       def self.all(client)
-        start_at = 0
         max_results = 1000
         result = []
+        next_page_token = nil
+
         loop do
           # Use GET endpoint with query parameters
-          url = client.options[:rest_base_path] +
-                "/search/jql?jql=&expand=transitions.fields&maxResults=#{max_results}&startAt=#{start_at}"
+          url = client.options[:rest_base_path] + "/search/jql?jql=&expand=transitions.fields&maxResults=#{max_results}"
+
+          # Use nextPageToken for pagination
+          url += "&nextPageToken=#{CGI.escape(next_page_token)}" if next_page_token
 
           response = client.get(url)
           json = parse_json(response.body)
           json['issues'].map do |issue|
             result.push(client.Issue.build(issue))
           end
-          break if json['issues'].empty?
 
-          start_at += json['issues'].size
+          # Use isLast field and nextPageToken for pagination
+          break if json['isLast'] || json['issues'].empty?
+          next_page_token = json['nextPageToken']
         end
         result
       end
 
-      def self.jql(client, jql, options = { fields: nil, start_at: nil, max_results: nil, expand: nil, validate_query: true })
+      def self.jql(client, jql, options = { fields: nil, max_results: nil, expand: nil, next_page_token: nil })
         url = client.options[:rest_base_path] + "/search/jql?jql=#{CGI.escape(jql)}"
 
         if options[:fields]
@@ -91,7 +95,7 @@ module JIRA
                             end.join(',')}"
         end
 
-        url << "&startAt=#{CGI.escape(options[:start_at].to_s)}" if options[:start_at]
+        url << "&nextPageToken=#{CGI.escape(options[:next_page_token])}" if options[:next_page_token]
         url << "&maxResults=#{CGI.escape(options[:max_results].to_s)}" if options[:max_results]
 
         if options[:expand]

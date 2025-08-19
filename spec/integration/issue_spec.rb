@@ -45,10 +45,10 @@ describe JIRA::Resource::Issue do
       end
 
       before do
-        stub_request(:get, "#{site_url}/jira/rest/api/2/search/jql?jql=&expand=transitions.fields&maxResults=1000&startAt=0")
+        stub_request(:get, "#{site_url}/jira/rest/api/2/search/jql?jql=&expand=transitions.fields&maxResults=1000")
           .to_return(status: 200, body: get_mock_response('issue.json'))
 
-        stub_request(:get, "#{site_url}/jira/rest/api/2/search/jql?jql=&expand=transitions.fields&maxResults=1000&startAt=11")
+        stub_request(:get, "#{site_url}/jira/rest/api/2/search/jql?jql=&expand=transitions.fields&maxResults=1000&nextPageToken=token12345")
           .to_return(status: 200, body: get_mock_response('empty_issues.json'))
       end
 
@@ -93,5 +93,7 @@ describe JIRA::Resource::Issue do
 
       it_behaves_like 'a resource with JQL inputs and a collection GET endpoint'
     end
+
+
   end
 end

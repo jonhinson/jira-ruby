@@ -3,6 +3,8 @@
   "startAt": 0,
   "maxResults": 1000,
   "total": 11,
+  "isLast": false,
+  "nextPageToken": "token12345",
   "issues": [
     {
       "expand": "editmeta,renderedFields,transitions,changelog",
